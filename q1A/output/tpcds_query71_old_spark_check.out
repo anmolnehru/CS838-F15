@@ -1,0 +1,14 @@
+Connecting to jdbc:hive2://10.0.1.23:10000/tpcds_text_db_1_50
+log4j:WARN No appenders could be found for logger (org.apache.hive.jdbc.Utils).
+log4j:WARN Please initialize the log4j system properly.
+log4j:WARN See http://logging.apache.org/log4j/1.2/faq.html#noconfig for more info.
+Connected to: Spark SQL (version 1.5.0)
+Driver: Spark Project Core (version 1.5.0)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+No rows selected (8.675 seconds)
+Error: org.apache.spark.sql.AnalysisException: expression 'ext_price' is neither present in the group by, nor is it an aggregate function. Add to group by or wrap in first() if you don't care which value you get.; (state=,code=0)
+Closing: 0: jdbc:hive2://10.0.1.23:10000/tpcds_text_db_1_50
+
+real	0m14.426s
+user	0m1.689s
+sys	0m0.254s

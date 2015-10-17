@@ -1,0 +1,14 @@
+Connecting to jdbc:hive2://10.0.1.23:10000/tpcds_text_db_1_50
+log4j:WARN No appenders could be found for logger (org.apache.hive.jdbc.Utils).
+log4j:WARN Please initialize the log4j system properly.
+log4j:WARN See http://logging.apache.org/log4j/1.2/faq.html#noconfig for more info.
+Connected to: Spark SQL (version 1.5.0)
+Driver: Spark Project Core (version 1.5.0)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+No rows selected (3.815 seconds)
+32 rows selected (79.31 seconds)
+Closing: 0: jdbc:hive2://10.0.1.23:10000/tpcds_text_db_1_50
+
+real	1m24.871s
+user	0m1.629s
+sys	0m0.305s
