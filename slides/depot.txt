@@ -1,0 +1,93 @@
+CLOUD STORAGE SECURITY
+CS838, December 3, 2012
+
+BACKGROUND
+- Safety & liveness
+    - Safety: nothing bad happens
+    - Liveness: something good eventually happens
+- Consistency (Strongest to weakest)
+    [http://www.mimuw.edu.pl/~ms209495/talks/2011/depot/foil05.html]
+    - Sequential consistency: all nodes see all writes in the same order 
+    - Causal consistency: writes that are causally related are seen by all 
+      nodes in the same order; concurrent writes (i.e., writes which are not 
+      causally related) may be seen in a different order by each node
+    - Fork consistency: correct server has total order of writes; faulty
+      server may show different version to different clients
+    - Fork join consistency: correct server is same as fork consistency;
+      fork resolution (join) appears as concurrent write
+    - Fork join causal consistency: causal consistency + fork join consistency
+- Prior work on reducing trust assumptions
+    - Quorum and replicated state machine: tolerate failures by a fraction of
+      servers; sacrifice safety and liveness when faults exceed a threshold
+    - Fork-based systems: maintain safety without trusting a server;
+      sacrifice liveness when server is unreachable, or faulty server may
+      permanently partition correct clients
+
+DEPOT OVERVIEW
+* What is the primary goal of Depot?
+    - Ensure data availability and durability even with untrusted storage
+      service provider
+- Correctness assumptions
+    - Safety: a client only need trust itself
+    - Liveness and availability
+        - Puts: client can always update and any subset of connected, correct
+          clients can always share updates
+        - Gets: allow reads to be served by any node (even other clients)
+
+DEPOT OPERATION
+- Information maintained by nodes
+    - Logical clock
+        - Incremented when node performs a local write
+        - Advanced when node receives an update from another node
+    - Version vector
+        - Contains an entry for each node in the system whose value is the
+          highest logical clock observed for any update from that node
+    - Log
+        - List of all updates in causal consistency order (i.e., ordered by
+          logical clock times, with node id used to break ties)
+    - Checkpoint
+        - Reflects current state of system
+
+- Node N calls write(key, value)
+    - Node N increments its logical clock
+    - Node N constructs update message
+        DependencyVersionVector, SignedByN{key, Hash(value), LogicalClock@N,
+            Hash(history)}
+        - Hash(history) encodes history on which update depends
+        - DependencyVersionVector indicates the version vector the history
+          hash covers
+        - SignedByN node signs update with its private key
+- Correct node C accepts update u if it meets 4 conditions:
+    1) u is properly signed 
+    2) u must be newer than any updates C already received from signing node
+    3) C's version vector must include u's DependencyVersionVector
+    4) u's history hash must match a hash computed by C across every node's 
+       last update at time DependencyVersionVector
+    3 & 4 ensure that before receiving update u, C has already received all
+        updates on which u depends
+- Faulty node F can create forking updates
+    - Two updates u@F u'@F such that neither update's history includes the 
+      other's
+    - Send each update to different node: u to N and u' to N'
+    - Node N creates update u2 depending on u and sends this to N'
+    - N' cannot detect problem based only on DependencyVersionVector, since
+      it would think it already received u on which u2 depends
+    - However, Hash(history) computed by N' will not match Hash(history) in u2
+    - Without Hash(history), N' would accept u2 violating causality and never
+      allowing the system to reach eventual consistency
+- Joining a fork
+    - N and N' find the latest VersionVector with a common history
+    - N sends its updates beginning from this point to N'
+    - VersionVector entry for node M, whcih issued the forking updates is
+      expanded to contain 3 values:
+        - Pre-fork entry for node M
+        - Post-fork entry with logical clock for u
+        - Post-fork entry with logical clock for u'
+    - Join appears as a concurrent update 
+    - Unclear if the entries can be compressed again at some point
+
+DISCUSSION
+* Is the overhead of Depot acceptable?
+* Is all the complexity introduced by Depot really necessary?
+* What other security concerns are associated with storage other than data
+  availability and durability?

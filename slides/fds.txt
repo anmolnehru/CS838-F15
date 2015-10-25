@@ -1,0 +1,117 @@
+FLAT DATACENTER STORAGE
+CS838, November 19, 2012
+
+DESIGN OF FDS
+- Data layout
+    - Blob: logical unit of data 
+    - GUID: unique 128-bit identifier for a blob
+    - Tract: fixed size piece of a blob (8MB)
+    - Tractserver: process associated with each drive
+        - Services read and write requests from clients
+        - Use raw disk interface
+        - E.g., 1,2,3,4,5
+    - Tract Locator Table (TLT): list of all tractservers (repeated m times
+      in random order)
+        - Cached at clients
+        - Version number assigned to each row
+        - Recreated when tractserver is added or removed
+        - Size of TLT is proportional to the # of tractservers
+        - E.g., 1,2,3,4,5,3,2,4,1,5
+    - Tractserver where tract is stored is determined by:
+        (Hash(GUID) + Tract_#) mod TLT_length
+        - Radomizes each blob's start to maximize parallelism
+        - Ensures large blobs are uniformly distributed across tractservers
+        - E.g., (3 + 0) mod 10 = 3, (3 + 1) mod 10 = 4, etc.
+    - Metadata is stored like every other tract (Tract # = -1)
+        - Blob is initialized to size 0
+        - Need to extend a blob before writing past its end; space is
+          allocated lazily
+    - Client library: hides the details of tractservers and the FDS network
+      protocol
+        - Calls are non-blocking and invoke a callback function when an 
+          operation completes
+- Frameworks using FDS should assign work at fine granularity during task
+  execution
+- Replication
+    - n-way replication lists n tractservers in each row in the TLT
+    - Send write to every tractserver in the selected TLT row
+    - Send read to a single random tractserver in the selected TLT row
+    - e.g., 1,2,3,4,5,3,2,4,1,5
+            5,3,2,1,4,4,1,5,2,3
+            2,5,4,3,1,2,5,1,3,4
+- Failure
+    - Detected by heartbeat messages
+    - All rows in the TLT containing a failed tractserver are invalidated and
+      random tractservers are chosen to fill the empty spaces 
+    - Version # of each row is incremented to invalidate copies currently
+      cached at clients
+    - Hand out new TLT to tractservers and waits for all to ACK before giving
+      new TLT to clients
+    - Tractserver starts copying from other replicas when new TLT is received
+    - Group tractservers into failure domains (e.g., racks); no row of the
+      TLT should have two or more tractservers from the same failure domain
+- Network
+    - Full-bisection bandwidth between nodes
+    - Network bandwidth on each node equals its disk bandwidth
+    - Fan-in during reads can causing incast problems
+        - Collisions mostly occur at the receiver because of full bisection
+          bandwidth
+        - Uses RTS/CTS flow-scheduling
+        - Extra RTT required is not problematic due to deep read-ahead
+
+STUDENT QUESTIONS/FEEDBACK
+Yanpei: There is one thing I don't understand. The authors said "in an n-disk
+cluster where one disk fails, roughly 1/nth of the replicated data will be
+found on all n of the other disks. All remaining disks send the
+under-replicated data to each other in parallel, restoring the cluster to
+full replication very quickly". I don't understand what this means. Do they
+mean something like "any n-1 nodes can be used to reconstruct the entire n
+nodes?" This sounds more like reconstructing using erasure code to me -- not
+sure if this is what they mean.
+
+Jim: FDS seems to be essentially just another key-value store. 
+
+Jim: I just don't think FDS is very impressive. The gains exhibited in the
+Applications section of the paper seem to come largely from the network, not
+the design of FDS.
+
+Leo: FDS basically throws away advances in distributed storage technology
+like consistent hashing , paxos etc and chooses simple options where needed.
+consistent hashing allows new node additions or node failures to affect only
+the neighbors. While FDS strives to involve all nodes for fast recovery /
+fast balancing. also, FDS might not be good at handling partitioned
+networks - basically FDS needs only one metadata server to exist at any point
+in time and needs operator involvement to avoid cluster corruption.
+
+Leo: I liked the paper overall but wonder if the paper might have positioned
+itself as not throwing away data locality but hybrid model where it is not
+aggressively optimized for promoting data locality.
+
+Leo: Also, wondering if data points on SSD disks and faster disks could have
+been added. Such faster disks might further the throughput difference between
+local and remote disks.
+
+Josh: I found FDS to be an interesting application of full bisection
+bandwidth. Treating all disks the same simplifies the system and layout of
+data. It also allows for quick failure recovery.
+
+Ram: FDS fits between GFS/Hadoop and DHTs i.e., it supports one-hop access to
+data, fast reaction to failure like GFS/hadoop and high scalability, no
+central bottlenecks like DHTs.
+
+Srinivas: Can the same model be applied to satisfy latency-sensitive demands?
+Since data is striped and hash-partitioned already, I think it should be
+possible.
+
+Xishuo: The question I have is that the FDS requires full bisection
+bandwidth. Can we relax this constraint and yet still use some of the ideas
+presented in the paper?
+
+Robert: I think this is an interesting paper built on top of heterogeneous
+storage nodes. Still it seems it is quite expensive to build such a CLOS
+network.
+ 
+SOFTWARE DEFINED STORAGE
+* Is this a good base?
+* What else do we need?
+    - Considering journaling filesystems as an example

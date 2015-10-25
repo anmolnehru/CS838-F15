@@ -1,0 +1,161 @@
+DRFQ & CoMb
+CS838, October 17, 2012
+
+* What problem does DRFQ address?
+    - Providing fair sharing of several different resources over time
+    - Focus on allocating resources on a per-flow basis; resources can by
+      consumed by any of several functions operating on a flow
+* Why is solving this problem important?
+    - Different middlebox functionality have different bottleneck resources
+    - If we consolidate multiple middleboxes on a single server (CoMb), we
+      need a way to allocate resources to different the functions
+    - E.g., flow monitoring is bottlenecked by network, RE is bottlenecked by
+      memory, IPSec is bottlenecked by CPU
+* What work is related to DRFQ?
+    - Fair queuing (FQ) in routers
+        - Allocate equal share of bandwidth to all flows
+        - Several mechanisms to do so: weighted fair queuing (WFQ), deficit
+          round robin (DRR), stochastic fair queuing (SFQ)
+        - DRR allocates some fraction of bandwidth each step; you can only
+          forward a packet if you have enough allocation built up
+        - Memoryless scheduling: flow's current share of resources should be
+          independent of its past share
+    - Dominate resource fairness (DRF)
+        - Fair queueing for multiple resources
+        - Fair sharing in space: how many resources do you get on each
+          server?; we want fair sharing in time
+
+DRFQ REQUIREMENTS
+* What properties do we need to provide?
+    - Share guarantee: each flow gets a proportional (i.e., fair) allocation 
+      of resources 
+    - Strategy-proof: you cannot artificially increase resource allocation
+- Share guarantee   
+    * How do we define share guarantee in regular FQ?
+        - If there are n flows, each flow gets 1/n of the bandwidth
+    * How do we define share guarantee for multiple resources?
+        - A flow gets at least 1/n of one of the resources it uses
+    * Why does applying fair queuing to one of the resources not work?
+        - Flow 1 requires 2 time units of CPU and 1 time unit of network
+          Flow 2 requires 1 time unit of CPU and 1 time unit of network
+        - If we do fair queueing based on the network, we alternate one
+          packet from each flow
+        - Flow 1 gets 2/3 of CPU and 1/3 network
+          Flow 2 gets 1/3 of CPU and 1/3 network, violating share guarantee
+- Strategy-proof
+    * How might a flow artificially increase the fraction of resources it
+      gets?
+        - Send smaller packets which consume same network time, but more CPU
+          time
+    * Why does applying fair queueing to the bottleneck resource not work?
+        - Flow 1 requires 1 time units of CPU and 4 time units of network
+          Flow 2 requires 6 times units of CPU and 4 time units of network
+        - Bottleneck is network, so each flow gets half of the network time
+        - Flow 1 increases its CPU usage to 3 time units
+        - Bottleneck is CPU, so each flow gets half of the CPU time
+        - Now flow 1 gets more network time
+
+DRFQ ALGORITHMS
+- Borrow notion of virtual time from traditional fair queueing
+* Need a way to compare virtual time across resources. How does DRFQ do this?
+    - Amount of time required at a given resource to process a packet,
+      assuming all of the given resources are dedicated to processing this
+      packet
+    - E.g., 10us CPU time required to process packet, if we have four cores,
+      then virtual processing time is 2.5us
+* What trade-off do we need to make?
+    - Memoryless: flow's current share of resources should not depend on its
+      past share
+    - Dove-tailing: if resource consumption of a flow alternates, we want
+      allocations that match what we would get if resource consumption did
+      not alternate
+- Review Start-time Fair Queuing (SFQ)
+    - Start and finish times are per-flow
+    - Start time of a packet is maximum of virtual time at arrival and finish
+      time of previous packet
+      S(p_k) = max(V(a_k), F(p_k-1)
+    - Finish time of a packet is its start time plus the time required to
+      handle it, which depends on length
+      F(p_k) = S(p_k) + F(p_k)
+    - In SFQ
+        - Virtual time is start time of packet in service
+        - Schedule the packet with the lowest virtual start time
+- Memoryless DRFQ
+    - Track start and finish times based on the time required for the
+      dominant resource a packet consumes
+    - Start time of a packet is maximum of virtual time at arrival and finish 
+      time of previous packet
+      S(p_k) = max(V(p_k), F(p_k-1))
+    - Finish time of a packet is its start time plus the time required for
+      its dominant resource
+      F(p_k) = S(p_k) + max_j{s_k_j}
+    - Virtual time is 0 if no packets are in service currently and the
+      maximum of the start times of all packets in service at a resource
+      V(t) = max_j{S(p_k, j)}
+- Dove-tailing DRFQ
+    - Track start and finish times on a per resource basis
+    - Start time of a packet at resource j is maximum of virtual time at
+      resource j at arrival and finish time at resource j of previous packet 
+      S(p_k, j) = max(V(p_k, j), F(p_k-1, j))
+    - Finish time of a packet at resource j is start time at resource j plus
+      the time required at resource j
+      F(p_k, j) = S(p_k, j) + s_k_j
+    - Schedule packet whose maximum per-resource start time is smallest
+      across all flows 
+    - Virtual time is 0 if no packets are in service currently and the
+      maximum of the start times of all packets in service at a resource
+      V(t) = max_j{S(p_k, j)}
+
+USE CASE FOR DRFQ: CoMb
+- Middlebox deployment today: provision dedicated appliances or servers for 
+  each middlebox type to handle peak load
+- Consolidating Middleboxes (CoMb) seeks to improve resource efficiency and
+  centralize management
+- Opportunities leveraged by CoMb
+    - Application multiplexing
+        - Different functionalities have different resource demand profiles
+        - Combining multiple functionalities can better use all resources
+    - Reusing software elements
+        - Some processing of packets is shared across types of middleboxes
+        - With consolidation, shared processing only needs to happen once
+    - Spatial distribution
+        - Rather than placing specific middleboxes at specific points, all
+          middleboxes can exist at a variety of places in the network
+- Two key components of CoMb
+    - Network controller that determines which CoMb instance should apply a
+      given functionality to a packet
+    - Individual CoMb boxes that apply sets of functionality to a packet and
+      allocate resources to specific functions (this is where DRFQ comes in)
+- Deciding which CoMb instance should apply functionality
+    - Assume multiple CoMb instances are along the path a packet takes
+    - Inputs
+        - AppSpec: what middlebox functionality should be applied to which
+          traffic subsets and in what order
+        - NetworkSpec: what network path is taken by which traffic subets
+        - BoxSpec: how many resources are available on a given CoMb box and
+          how many of which resources are required for a given functionality
+    - Solve an optimization problem to decide which functionality to
+      apply where
+- Scheduling functionality on a specific CoMb instance
+    - Two options:
+        - Assign one middlebox functionality per core
+        - Assign one sequence of middlebox functionality per core (the same
+          function may run on multiple cores)
+    - The later approach is better because a single packet is processed
+      entirely in one core
+    - Still need to decide, within that core, how to schedule packets: use
+      DRFQ
+
+OTHER USE CASES
+* In what other data center situations do we want to provide share guarantees
+  and/or strategy-proofness?  Consider situations where only a single type of
+  resource is involved and multiple resources are involved.
+
+* Which of the following should be use for each situation: classic Fair 
+  Queueing (FQ), per-resource fairness, Dominant Resource Fairness (DRF), or 
+  Dominant Resource Fair Queueing (DRFQ)?  Remember that DRF was designed for 
+  allocation of CPU & memory resources in space, while DRFQ is designed for 
+  allocation of resources in time.
+
+* Are there properties DRFQ does not provide that may be desirable in CoMb or
+  another situation?

@@ -1,0 +1,76 @@
+C-THROUGH
+CS838, October 15, 2012
+
+Read 1, 3, 4.1, 4.2, 6.1, 6.2, 7
+
+C-THROUGH OVERVIEW (7 min)
+* What improvements does c-Through offer compared to an entirely
+  packet-switched network with full bisection bandwidth?
+    - Offers higher inter-rack bandwidth for pairs of racks over short time
+      periods
+* What does the data center topology look like with c-Through?
+    - Figure 1 on page 3
+* How does c-Through estimate rack-to-rack traffic demands?
+    - Increase maximum buffer size on a per-flow basis
+    - Estimate rack-to-rack demands based on buffer lengths in end-hosts
+* Why does it take this approach?
+    - Avoids modifications to switches 
+    - Avoids head-of-line blocking
+    - Increases scalability
+* How is the optical configuration computed?
+    - Graph of racks (vertices) and bandwidth demands between racks (edges)
+    - Match is a set of pairwise non-adjacent edges
+    - Perfect match is a matching that matches all vertices
+    - Want perfect max with maximum aggregated weight
+* How does c-Through de-multiplex packets between the optical network and the
+  packet-switched network?
+    - Use separate VLAN for optical network and electrical network
+    - Host tags packets for specific VLAN based on destination
+    - Give higher-priority to optically connected destinations
+* Why does it take this approach? 
+    - Avoids modifications to switches
+    - No negative interactions with routing protocols
+
+C-THROUGH DESIGN CHOICES (5 min)
+* How else might we design a data center fabric to achieve a network with
+  c-Through-like properties?
+    - Wireless communications
+* What negative implications does c-Through have?
+    - Latency increases -- for short flows yes, for long flows sort-of
+    - Unfair bandwidth allocations -- simultaneous transfers from two racks
+      to a third rack cannot both get an optical path; talk about FairCloud
+      next class
+
+INFLUENCE OF DATA CENTER FABRIC DESIGN (10 min in groups, 15 min whole class)
+* How does the design of the data center fabric influence compute resources?
+  Consider both a full bisection bandwidth (e.g., Portland) and temporary
+  high-bandwidth pathways (e.g., c-Through) network fabric design.
+    - Placement of compute resources does not have performance implications
+      in full bisection bandwidth, but does matter with temporary pathways
+    - Temporary pathways influence packet-scheduling on end-hosts, even
+      if switches are modified instead of end-hosts
+
+* How does the design of the data center fabric influence storage?
+  Consider both a full bisection bandwidth (e.g., Portland) and temporary
+  high-bandwidth pathways (e.g., c-Through) network fabric design.  It may
+  be useful to think about the HDFS parameters you changed for Assignment #3.
+    - Separate storage system can be attached to the network anywhere with 
+      full bisection bandwidth; might want several temporary pathways from 
+      the separate storage system to allow simultaneous high-bandwidth IO
+    - Size of data blocks will influence the benefits temporary pathways can
+      provide -- transferring larger blocks less frequently makes better use
+      of temporary pathways 
+    - Higher replication means we need to contact more racks, which is not
+      going to work as well with temporary pathways
+
+* How should applications be modified to best leverage each of the data
+  center fabric designs?
+    - Want applications to have a constant stream of traffic for full
+      bisection bandwidth network, versus a bursty stream for temporary
+      pathways
+    - Applications could communicate needs for the future to enable better 
+      scheduling of temporary pathways
+    - Job scheduling in MapReduce can greatly influence the benefits of 
+      temporary pathways; scheduling does not matter much for full bisection
+    - Prefetching can be more beneficial with temporary pathways, if app
+      prefetches when a pathway is in place

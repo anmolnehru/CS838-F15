@@ -1,0 +1,100 @@
+DREMEL AND FLUMEJAVA
+CS838, September 26, 2012
+
+* Who read Dremel?  Who read FlumeJava?  Who read through section 4 of
+  FlumeJava?
+* Who liked Dremel better?  Who liked FlumeJava better?
+
+DREMEL OVERVIEW
+* What are the key features of Dremel?
+    - Data model: strongly-typed nested records
+        - Example:
+            message Document {
+                required int64 DocId;
+                repeated group Name {
+                    repeat group Language {
+                        required string Code;
+                        optional string Country; }
+                    optional string Url; }}
+    - Storage format: nested columnar storage
+        * Why columnar storage?
+            - Storing all values of a given field consecutively improves
+              retrieval efficiency
+    - Query language: SQL-like language
+    - Query execution strategy: multi-level serving tree
+        * Why this query execution strategy?
+            - TODO: answer this
+- Nested columnar storage
+    * What are the major challenges?
+        - Space-efficient representation
+        - Fast encoding
+        - Fast reassembly
+    * How does it work?
+        - Dremel Slides 10-19
+- Multi-level serving tree query execution
+    - Only discuss one-pass aggregations -- e.g., word count
+    * How does it work?
+        - Send query to root server
+        - Root server identifies all possible partitions (tablets)
+        - Root server re-writes query as aggregation of results of sub-query
+        - Send sub query to intermediate nodes
+        - Intermediate nodes repeat the process
+        - Leaf servers run query on small set of tablets and send results up
+          the tree
+        - Intermediate node aggregates results from leaf servers and send
+          results up the tree
+    * What are the parameters we can tune for query execution?
+        - Number of slots on leaf servers
+        - Number of leaf servers
+        - Levels of intermediate servers
+    * How do these affect execution?
+* What challenges are un-addressed?
+    - More complex queries -- inter and intra-record aggregation, top-k,
+      joins, user-defined functions
+
+FLUMEJAVA OVERVIEW
+* What are the key features of FlumeJava?
+    - Core abstractions
+    - Deferred evaluation
+    - Optimization of execution plan
+    - Executor -- runs tasks locally or as parallel MapReduce job
+- Core abstractions
+    * What are these abstractions?
+        - PCollection<T>
+        - PTable<K,V>
+        - parallelDo() -- input PCollection<T>, output PCollection<S>;
+            can be used to express map and reduce parts of MapReduce
+        - groupByKey() -- convert many PTable<K,V> into single 
+            PTable<K, Collection<V>>
+        - combineValues() -- convert PTable<K,Collection<V>> to
+            PTable<K,V>
+        - flatten() -- convert many PCollection<T> into a single
+            PCollection<T>
+    * Why these abstractions?
+- Deferred evaluation
+    * Why do we want deferred evaluation?
+        - So we can optimize the execution plan
+- Optimization of execution plan
+    * What optimizations can we apply?
+        - Combine producer-consumer ParallelDo -- composition of functions
+        - Combine sibling ParallelDo -- combine ParallelDo that read same
+          input
+        - Combine ParallelDo, GroupByKey, CombineValues, and Flatten into
+          a MapShuffleCombineReduce (MSCR) operation
+    * Why perform these optimizations?
+* What challenges are un-addressed?
+
+EFFECTS ON THE DATA CENTER
+* Compare FlumeJava with MR, Dremel with MR, and FlumeJava with Dryad
+    * What are the differences in the primitives offered by the framework?
+    * How do these differences influence the flexibility of the framework?
+    * How do these differences influence the performance of data analysis
+      conducted using the framework?
+    * How does FlumeJava or Dremel influence the data center? What are its
+      effects on the network? Storage services? Compute resources?
+    * If other applications or tasks are running in the data center how does
+      FlumeJava or Deremel influence their performance?
+    * Does MapReduce or Dryad have less of an effect on other applications or
+      tasks running in the data center?  
+    * If the other applications are actually jobs from another data analytics
+      framework, how do the two analytics frameworks interact?

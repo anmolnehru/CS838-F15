@@ -1,0 +1,73 @@
+SDN TESTING AND DEBUGGING
+CS838, November 12, 2012
+
+IMPORTANCE OF TESTING & DEBUGGING
+* What types of problems can arise in an SDN?
+    - Forwarding loops
+    - Link failures
+    - Inconsistent forwarding -- often leads to forwarding loops
+    - Unreachable hosts
+    - Reachable hosts (which should not be reachable)
+    - Slice cross-over
+
+* Which of these problems also occur in traditional networks?  Do these
+  problem manifest differently in SDNs?  
+    - Forwarding loops: in traditional networks caused by failure of spanning
+      tree protocols
+    - Link failures: response is different, but problem is the same
+    - Unreachable hosts: in traditional networks caused by errors in ACLs or 
+      routing entries; in SDNs caused by missing forwarding entries
+    - Reachable hosts: in traditional networks caused by errors in ACLs; in
+      SDNs called by unintended rule overlap
+
+* What tools or techniques might we use to detect, and diagnose the cause of, 
+  these problems?
+
+TOOLS & TECHNIQUES FOR DEBUGGING SDNs
+- Often borrow techniques from programming languages
+- Challenging to detect problems because of many control loops (switches,
+  FlowVisor, controller, applications
+- Languages to minimize errors: Frenetic & Nettle
+- Primitives: Consistent Updates
+- Symbolic execution & model checking of SDN applications: NICE
+- Static checking of network: Header Space Analysis (HSA)
+    * What are the main ideas in HSA?
+        - Treat headers as sequence of bits of length L
+        - Define transfer functions for networking equipment (switches,
+          routers, middleboxes, etc.)
+    - Key components of the model
+        - Header Space is an L-dimensional hyperspace representing all
+          possible headers
+        - Network Space is the space of all possible network ports localized
+          to all possible input ports in the network 
+        - Network transfer function: packets transformed from one point in 
+          the network space to another point in the network space
+        - Topology transfer function: models the behavior of links; packets
+          are moved from one port in the network space to another port
+        - Header space algebra:
+            - Set operations: intersection, union, complement, difference 
+            - Domain: set of all possible inputs a transfer function accepts
+            - Range: set of all possible outputs a transfer function produces
+    - Use case: reachability analysis
+        - Consider space of all headers leaving source
+        - If no header space remains at destination, then two hosts cannot
+          communicate
+        - Range is the same, or more limited, after applying the transform
+          function
+- Live debugging: ndb
+    - Provides backtrace like gdb
+        - Breakpoint is a filter on packet headers that applies to 1+ switches
+        - Switches send copy of every packet and applicable flow entry 
+          (postcard)
+        - Collector stores postcards to construct backtrace
+        - Need full view of flow table, not just applicable flow entries, so 
+          ndb should observe and control every change to flow table state 
+          (e.g., flow entry timeout) 
+    - Evaluation
+        - Adds significant bandwidth overhead
+        - Collector can be parallelized 
+
+LIMITATIONS & OPEN PROBLEMS
+* What techniques are best for each type of problem?
+
+* What types of problems cannot be diagnosed using the proposed techniques?

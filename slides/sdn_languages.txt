@@ -1,0 +1,134 @@
+SDN LANGUAGES
+CS838, November 5, 2012
+
+
+OVERVIEW OF PRIMITIVES
+- Traditional network
+----------
+Policy                  Static, declarative stanzas 
+----------
+Traditional Switch      Policy interface
+----------
+- SDN
+----------
+                        ???
+---------
+Frenetic                Queries; operators } Event streams
+Nettle                  Signal transform function } Control message streams
+----------
+NOX, POX, Beacon, etc.  Flow table entries; events
+----------
+OpenFlow Switches       Flow table entries; events
+----------
+
+
+CHALLENGES IN OPENFLOW & CONTROLLERS
+* What are the challenges in using the primitives provided by OpenFlow and
+  today's controllers?
+- Composition of applications
+    - Need to deal with overlaps in the flow space relevant to each
+      application => create created flow table entries
+    - Do not confuse with slicing
+- Multiple control loops 
+    - OpenFlow switch has a control loop and controller has a control loop
+    - Asynchronous communication between control loops
+    - Each control loop may be in a different state
+    - Difficult to reason about overall behavior
+- Race conditions
+    - E.g., controller may not install flow table entries before additional 
+      packets arrive at switch, causing multiple packets from flow to arrive
+      at the controller
+    * Other there other race conditions?
+    * Does Frenetic solve race conditions?
+        - Only provides consistency on a single switch for each flow
+        - Consistency issues between switches still exist
+- Alignment with high-level goals
+    - Major concern for networks is reachability
+    - Confusing to think about reachability in terms of streams of
+      events => use reachability matrix as a primitive
+- Many of these issues are exacerbated when the controller is distributed,
+  like in ONIX
+
+
+FRP LANGUAGES FOR SDN
+- Functional Reactive Programming (FRP)
+    - "Events" occurring at finite points in time (e.g., new flow)
+    - "Switching" system in response to events (e.g., add rules)
+    - Separation of details from the model (e.g., flow stats sampling rate)
+- Frenetic
+    1) Query Language
+        - Result of query is a stream of events
+        - Contents of events depends on type of data (Select) and filter 
+          criteria (Where)
+        - Frequency of events depends on grouping (GroupBy), changes
+          (SplitWhen), and/or time (Every)
+        - Query languages has the power for the controller to know about
+          every packet => raises performance issues
+    2) Operators
+        - Manipulate events to achieve desired behavior
+        - E.g., add rules based on events, output statistics, etc.
+- Nettle
+    - Construct functions that transform streams of messages received from 
+      switches into streams of commands sent to switches
+    - Messages and commands are based on OpenFlow primitives
+
+CRITIQUE OF FRENETIC
+* Would having a higher level language like Frenetic been useful in
+  completing Assignment #4?
+
+* What other primitives should a SDN language provide?
+
+REVIEW COMMENTS
+Adoption
+- "It would be interesting to see how open to community is to adopting it and
+  what extensions are possible in the future." [Zainab]
+    - There is plenty of opportunity for designing alternatives
+    - Community's thoughts on abstractions at the controller is still at a
+      young stage
+    - Individuals are questioning whether OpenFlow is the right model
+
+Performance
+- "It would be interesting to see if similar abstractions could be used to
+  improve performance more." [Josh]
+- "It would have been nice to see some experiments that compared throughput
+  and latency." [Amanda]
+- "They probably should have also said whether or not there is added delay
+  because of the presence of the ‘runtime system’ and stated more clearly the
+  advantage of having the packets go to runtime and not the controller."
+  [Parvi]
+
+Ease of Use
+- "I like this paper as they are proposing a different way to manage the
+  network using high level programming language that also enables to reuse
+  the code and overcome some of the limitations imposed by OpenFlow/NOX
+  implementations." [Robert]
+- "I'm not fully convinced by the reduction of code size and ease of
+  programming claimed in the paper." [Xishuo]
+- "Frenetic is a good tool to have especially because of the power it yields
+  for quick SDN application development." [Raajay]
+- "I have to say, after spending a lot of time to implement my controller in
+  Beacon, I wish I had known something like this existed. [...] It appears to
+  be remarkably faster to implement logic. The imperative design is also a
+  step forward and while is certainly more constraining, may make simpler
+  implementations very easy and less error-prone to implement." [Luke]
+
+Design
+- "As the result, forwarding rules and queries are separated, which in my
+  opinion is a very good design." [Yanpei]
+
+Race Conditions/Consistency
+- "Early in the paper, the authors note that one problem with current
+  OpenFlow-based controllers is that it is very difficult to program them in
+  a modular way since different modules might interfere with one another. I
+  don't think the authors make it clear as to how Frenetic makes it easier to
+  deal with this problem. It is based on these compositional functional
+  combinators, but why couldn't you do something similar with a more
+  intuitive object-oriented approach?" [Jim]
+- "I'm a little unclear as to how they eliminate network race conditions, but
+  I see the general need to provide a high-level language for programming
+  network switches." [Mike]
+
+- "This opens up two main problems - 1) we can't read the state of the
+  network, 2) there is no easy way of handling all low-level details at the
+  switches." [Ram]
+

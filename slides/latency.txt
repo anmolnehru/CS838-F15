@@ -1,0 +1,163 @@
+NETWORK LATENCY ISSUES
+CS838, October 24, 2012
+
+INTRO
+- History of performance improvement (It’s Time for Low Latency. HotOS '11)
+    * How much improvement has there been between 1983 and 2011 for each of
+      the items, given knowledge of the values today?
+
+                1983        2011        Improved
+CPU speed       1x10Mhz     4x3Ghz      > 1,000x
+Memory size     <= 2MB      8GB         >= 4,000x
+Disk capacity   <= 30MB     2TB         > 60,000x
+Network BW      3Mbps       10Gbps      > 3,000x
+RTT             2.54ms      80us        32x
+
+- Networking research has focused largely on improving bandwidth
+* Why do we care so much about latency?
+    - Serving content to humans quickly (HULL argues latency doesn't matter
+      when a human is involved; do you buy this?)
+
+SOURCES OF LATENCY
+- Example scenario:
+    - Front-end web servers running as VMs
+    - Back-end key/value store parts of web pages
+    - Requests from clients come over the Internet
+
+* Take 5 minutes and list every source of latency you can think of.  Do   
+  not just think about network-related latency.
+
+- Application
+    - Time to construct page (depends on CPU speed)
+    - Time to perform key lookup (depends on memory speed, and disk speed)
+- Memory
+    - read from memory to perform index lookup (20ns per read)
+- Disk 
+    - Read actual data block from disk or flash
+    - Disk seek time
+    - Queueing delaying waiting for other reads/writes to complete
+- Operating system (15us)
+    - Waiting for process to be scheduled 
+    - Interrupt handling for reading from disk and NIC
+    - Packet de-multiplexing 
+    - Generate network protocol control messages
+    - Perform route lookup and append IP header
+    - Perform ARP lookup and append Ethernet header
+    - Firewall
+- Protocol
+    - ARP requests
+    - TCP handshake time
+    - TCP slow-start
+    - TCP congestion-control -- AIMD
+    - TCP retransmissions -- waiting for duplicate ACKS or timeout
+    - TCP delayed ACKs
+- Hypervisor
+    - Waiting for VM to be scheduled -- issue for Amazon EC2 small instances
+      (IEEE INFOCOM 2010)
+    - Packet de-multiplexing
+    - Copy from NIC into VM accessible memory
+- NIC  (2.5-32us)
+    - Checksumming, TCP offload (e.g., segment reassembly)
+    - Queueing
+    - Contending for access to the medium
+    - Transmission time
+- Data center network
+    - Propagation latency (5ns/m)
+    - Middleboxes
+    - Switches (10-30us)
+        - Queueing
+        - Sending across switch fabric 
+    - Congestion -> loss
+- Wide-area network 
+    - Propagation latency
+    - Sub-optimal routing
+    - Congestion -> loss
+
+- Timing breakdown for network aspects (It's Time for Low Latency. HotOS '11)
+Component               Delay       Round-Trip
+Network Switch          10-30μs     100-300μs
+Network Interface Card  2.5-32μs    10-128μs
+OS Network Stack        15μs        60μs
+Speed of Light (Fiber)  5ns/m       0.6-1.2μs
+
+REDUCING LATENCY
+* What research efforts have reduced network latency?
+    - Transition from copper to fiber
+    - Hardware improvements in switching fabrics
+    - Algorithm advances in switching
+    - Alternative queueing models in switches (QoS)
+    - More responsive transport protocols (DCTCP)
+    - Transport protocols with less control overhead (SPDY)
+    - Push computationally intensive actions to NICs (e.g., TCP checksums)
+    - Direct NIC access from VMs (vPF_RING)
+    - Wide-area caching
+
+HULL
+* What does HULL do?
+    - Reduces queueing in the network by pro-actively avoiding congestion
+* Why do we want to reduce queueing?
+    - Eliminates latency at switches waiting for transmission
+        - Makes latency at switches consistent
+* Why do we need to signal congestion before hand?
+    - Normal sign of congestion is queue build-up, but we don't want queueing
+    - If queue overflows, then we need to drop packets
+        - Takes time for TCP to detect loss
+        - Takes time to retransmit packets
+* What mechanisms does HULL use?
+    - Phantom queues (PQ)
+        - Virtual keep track of queue build-up by tracking packet rate
+        - One PQ per switch egress port
+        - Set explicit congestion notification marks (ECN) in packets based
+          on link utilization 
+        * Need to leave headroom -- Why?
+            - Need to avoid queueing
+            - Cannot avoid queueing entirely unless packets are perfectly
+              spaced
+            - Since packets aren't perfectly space, we leave some headroom to
+              allow for some non-perfect spacing and still avoid queueing
+    - DCTCP + ECN
+        - TCP normally cuts window in half when congestion is signaled
+            - Causes lower average bandwidth and lots of fluctuations
+        - DCTCP calculates fraction of packets with ECN marks and reduces
+          window size proportionally
+            - Minimizes bandwidth fluctuation
+    - Packet pacing
+        - Eliminates bursts that cause unwarranted response to congestion
+        - Pass through pacer to leave the NIC
+        - Enforces some average packet rate over small time intervals
+        - Only pace long flows, which are bandwidth sensitive as opposed to
+          latency sensitive
+
+OTHER LATENCY REDUCTION CASES
+- Disk latency vs. network latency
+    * What is latency of read/write on regular disk?
+    - Already said latency of network is at least about 150us round-trip,
+      average in data center is more like a few ms
+    - With regular disks, it is cheaper to do network IO than disk IO
+    * What is latency of read/write on flash?
+    - With flash disks, it is cheaper to do flash IO than network IO
+    * What does this mean for applications right now (assuming we don't do
+      anything about network latency)?  Think about HDFS.
+        - Data locality is key
+    * What is latency of read/write on memory?
+    - Always been faster to do read/write from memory than from network
+        - Leads to systems that use massive amounts of memory, e.g. memcached
+- Remote Direct Memory Access (RDMA)
+    - Memory IO is is very low latency
+    - Limit to how much memory we can put in one machine -> need to access
+      memory on other machines
+    - Waiting for OS on other side to handle request adds latency -> want to
+      avoid involvement of OS
+    - Request for chunk of memory is handled directly by NIC
+        - NIC on both sides has DMA
+        - Requests are handled in NIC hardware
+- WAN tricks
+    - Access geographically closest service
+        - Migrate services between data centers as demand shifts
+        - Move VMs around the world over the course of a day 
+        - Especially important for latency-sensitive apps like game servers
+    - Access data from geographically close cache (CDNs)
+    - Metric-based overlay routing
+        - Focus of Internet routing is reachability, not performance
+        - Overlay network can offer better latency
+        - Need to be cognizant of the scale at which latency changes
